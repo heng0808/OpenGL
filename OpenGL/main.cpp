@@ -4,6 +4,21 @@
 #include <iostream>
 using namespace std;
 
+// 定点着色器
+const char *vertexShaderSource = "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "void main()\n"
+    "{\n"
+    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    "}\0";
+
+const char *fragmentShaderSource = "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "void main()\n"
+    "{\n"
+    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+    "}\n\0";
+
 //当用户改变窗口的大小的时候，视口也应该被调整，需要一个回调函数
 void framebuffer_size_callback(GLFWwindow * window,int width,int height);
 //声明一个函数用来检测特定的键是否被按下
@@ -33,6 +48,8 @@ int main(){
     }
     //通知GLFW将我们窗口的上下文设置为当前线程的主上下文
     glfwMakeContextCurrent(window);
+    //注册定义好的回调函数，告诉GLFW每当窗口调整大小的时候调用这个函数
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     
     //GLAD是用来管理OpenGL的函数指针的，在调用任何OpenGL的函数之前我们需要初始化GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
@@ -40,8 +57,82 @@ int main(){
         return -1;
     }
     
-    //注册定义好的回调函数，告诉GLFW每当窗口调整大小的时候调用这个函数
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    
+    // 创建定点着色器对象
+    unsigned int vertexShader;
+    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    // 着色器源码附加到着色器对象
+    // 着色器对象作为第一个参数
+    // 着色器源码数量第二个参数
+    // 着色器源码作为第三个参数
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    // 编译着色器
+    glCompileShader(vertexShader);
+    // 检查着色器是否成功
+    int success = 1;
+    char infoLog[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+    }
+    std::cout<< "编译定点着色器失败" << infoLog << std::endl;
+    
+    // 创建片段着色器对象
+    unsigned int fragmentShader;
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+    }
+    std::cout<< "编译片段着色器失败" << infoLog << std::endl;
+    
+    // 着色器程序，链接才能使用我们的着色器
+    unsigned int shaderProgram;
+    shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shaderProgram, 521, NULL, infoLog);
+    }
+    std::cout<< "链接着色器失败" << infoLog << std::endl;
+    // 删除着色器对象
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    // 创建定点坐标
+    float vertices[] = {
+        -0.5f, -0.5f, 0.0f,
+         0.5f, -0.5f, 0.0f,
+         0.0f,  0.5f, 0.0f
+    };
+    // 定点缓冲对象，在GPU中开辟内存存储我们的定点信息
+    // Vertex Buffer Object 定点缓冲对象，用于管理GPU中的定点内存
+    unsigned int VBO, VAO;
+    // 创建VAO
+    glGenVertexArrays(1, &VAO);
+    // 缓冲对象id，和缓冲对象地址
+    glGenBuffers(1, &VBO);
+    // 绑定VAO
+    glBindVertexArray(VAO);
+    // 绑定定点缓冲对象到特定类型
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    // 复制定点数据到缓冲内存
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    // 解释定点数据
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    // 告诉GL该如何解析定点数据
+    glEnableVertexAttribArray(0);
+    
+    // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
+    // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
+    glBindVertexArray(0);
     
     //渲染循环(Render Loop)
     while (!glfwWindowShouldClose(window)) {
@@ -53,12 +144,19 @@ int main(){
         glClearColor(0.2f,0.3f,0.3f,1.0f);
         //glClear函数是一个状态使用函数，它使用当前的状态来用指定颜色清空屏幕
         glClear(GL_COLOR_BUFFER_BIT);
+        glUseProgram(shaderProgram);
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
         
         //glfwSwapBuffers函数会交换颜色缓冲
         glfwSwapBuffers(window);
         //glfwPollEvents函数检查有没有触发什么事件
         glfwPollEvents();
     }
+    
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteProgram(shaderProgram);
     
     //释放之前分配的所有资源
     glfwTerminate();
