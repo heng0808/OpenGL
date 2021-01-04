@@ -7,16 +7,20 @@ using namespace std;
 // 定点着色器
 const char *vertexShaderSource = "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
+    "layout (location = 1) in vec3 aColor;\n"
+    "out vec3 ourColor;\n"
     "void main()\n"
     "{\n"
     "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+    "   ourColor = aColor;\n"
     "}\0";
 
 const char *fragmentShaderSource = "#version 330 core\n"
     "out vec4 FragColor;\n"
+    "in vec3 ourColor;\n"
     "void main()\n"
     "{\n"
-    "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
+    "   FragColor = vec4(ourColor, 1.0f);\n"
     "}\n\0";
 
 //当用户改变窗口的大小的时候，视口也应该被调整，需要一个回调函数
@@ -74,8 +78,8 @@ int main(){
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        std::cout<< "编译定点着色器失败" << infoLog << std::endl;
     }
-    std::cout<< "编译定点着色器失败" << infoLog << std::endl;
     
     // 创建片段着色器对象
     unsigned int fragmentShader;
@@ -85,8 +89,8 @@ int main(){
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        std::cout<< "编译片段着色器失败" << infoLog << std::endl;
     }
-    std::cout<< "编译片段着色器失败" << infoLog << std::endl;
     
     // 着色器程序，链接才能使用我们的着色器
     unsigned int shaderProgram;
@@ -97,17 +101,18 @@ int main(){
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(shaderProgram, 521, NULL, infoLog);
+        std::cout<< "链接着色器失败" << infoLog << std::endl;
     }
-    std::cout<< "链接着色器失败" << infoLog << std::endl;
     // 删除着色器对象
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
     // 创建定点坐标
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f,
-         0.0f,  0.5f, 0.0f
+        // 位置             // 颜色
+        -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f,  // 右下
+         0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f,  // 左下
+         0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f   // 中上
     };
     // 定点缓冲对象，在GPU中开辟内存存储我们的定点信息
     // Vertex Buffer Object 定点缓冲对象，用于管理GPU中的定点内存
@@ -123,9 +128,18 @@ int main(){
     // 复制定点数据到缓冲内存
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     // 解释定点数据
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    // 参数1 位置
+    // 参数2 读取个数
+    // 参数3 是否进行坐标归一化
+    // 参数4 步长
+    // 参数5 偏移量
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6* sizeof(float), (void*)0);
     // 告诉GL该如何解析定点数据
+    // 以顶点属性位置值作为参数，启用顶点属性
     glEnableVertexAttribArray(0);
+    
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)(3*sizeof(float)));
+    glEnableVertexAttribArray(1);
     
     // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -140,11 +154,22 @@ int main(){
         //检测特定的键是否被按下，并在每一帧做出处理
         processInput(window);
         
-        //glClearColor函数是一个状态设置函数，用来设置清空屏幕所用的颜色
+        // 清屏
+        // glClearColor函数是一个状态设置函数，用来设置清空屏幕所用的颜色
         glClearColor(0.2f,0.3f,0.3f,1.0f);
-        //glClear函数是一个状态使用函数，它使用当前的状态来用指定颜色清空屏幕
+        // glClear函数是一个状态使用函数，它使用当前的状态来用指定颜色清空屏幕
         glClear(GL_COLOR_BUFFER_BIT);
+        
+        // 激活着色器
         glUseProgram(shaderProgram);
+        
+        // 更新uniform颜色
+//        float timeValue = glfwGetTime();
+//        float green = sin(timeValue) / 2.0f + 0.5f;
+//        int vertexColorLocation = glGetUniformLocation(shaderProgram, "ourColor");
+//        glUniform4f(vertexColorLocation, 0.0f, green, 0.0f, 1.0);
+        
+        // 绘制三角形
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 3);
         
